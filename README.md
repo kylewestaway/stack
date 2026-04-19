@@ -1,4 +1,3 @@
-
 # Stack
 
 A minimal daily habit tracker, designed in the spirit of Dieter Rams.
