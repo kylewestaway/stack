@@ -11,9 +11,25 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Stack" />
   <meta name="theme-color" content="#000000" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- iOS splash screens -->
+  <link rel="apple-touch-startup-image" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="splash-1290x2796.png" />
+  <link rel="apple-touch-startup-image" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="splash-1284x2778.png" />
+  <link rel="apple-touch-startup-image" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="splash-1179x2556.png" />
+  <link rel="apple-touch-startup-image" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="splash-1170x2532.png" />
+  <link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="splash-828x1792.png" />
+  <link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="splash-1242x2208.png" />
+  <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="splash-750x1334.png" />
+  <link rel="apple-touch-startup-image" media="(device-width: 360px) and (device-height: 780px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="splash-1080x2340.png" />
+  <style>
+    @font-face {
+      font-family: 'Inter';
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+      src: url('InterVariable.woff2') format('woff2-variations');
+    }
+  </style>
   <style>
     :root {
       --ink: #000000;
@@ -21,6 +37,7 @@
       --ink-faint: #e5e5e5;
       --paper: #ffffff;
       --rule: #e0e0e0;
+      --delta: #cfcfcf;
       --cell: 26px;
       --gap: 6px;
       --unit: 8px;
@@ -32,6 +49,7 @@
       --ink-faint: #2a2a2a;
       --paper: #000000;
       --rule: #2a2a2a;
+      --delta: #3e3e3e;
     }
 
     :root { --accent: var(--ink); }
@@ -168,7 +186,7 @@
 
     /* Subtle brightening when all 10 visible days are complete */
     .habit.full-streak .cell.filled {
-      filter: brightness(1.1) saturate(1.05);
+      filter: brightness(1.2) saturate(1.1);
     }
 
     .cell-label {
@@ -834,6 +852,16 @@
       transition: width 300ms ease;
     }
 
+    .sb-card-bar-pace {
+      position: absolute;
+      top: -2px;
+      bottom: -2px;
+      width: 1px;
+      background: var(--ink);
+      opacity: 0.35;
+      pointer-events: none;
+    }
+
     .sb-card-meta {
       display: flex;
       justify-content: space-between;
@@ -1422,6 +1450,13 @@
   </nav>
 
   <script>
+    // Register service worker for offline caching and instant subsequent loads.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
+    }
+
     // Declared early so init-time function calls don't trip TDZ errors.
     let currentScreen = 'home';
     let detailId = null;
@@ -1591,6 +1626,26 @@
       if (type === 'week') return 'This week';
       if (type === 'month') return 'This month';
       return 'This year';
+    }
+
+    // Returns the percentage of the current period that has elapsed
+    // (0-100). Used to place the pace tick on the progress bar.
+    function pacePercent(type) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (type === 'week') {
+        const elapsed = today.getDay() + 1; // Sun=1 .. Sat=7
+        return (elapsed / 7) * 100;
+      }
+      if (type === 'month') {
+        const days = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+        return (today.getDate() / days) * 100;
+      }
+      // year
+      const year = today.getFullYear();
+      const isLeap = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+      const totalDays = isLeap ? 366 : 365;
+      return (dayOfYear(today) / totalDays) * 100;
     }
 
     // ---------- Mark helpers ----------
@@ -1848,9 +1903,17 @@
           bar.className = 'sb-card-bar';
           const fill = document.createElement('div');
           fill.className = 'sb-card-bar-fill';
-          const pct = Math.min(100, Math.round((count / target) * 100));
+          const progressPct = (count / target) * 100;
+          const pct = Math.min(100, Math.round(progressPct));
           fill.style.width = pct + '%';
           bar.appendChild(fill);
+          // Pace tick: a subtle vertical line at the on-pace position.
+          // Present whether you're ahead or behind.
+          const pacePct = Math.min(100, pacePercent(habit.target.type));
+          const pace = document.createElement('div');
+          pace.className = 'sb-card-bar-pace';
+          pace.style.left = `calc(${pacePct}% - 0.5px)`;
+          bar.appendChild(pace);
           card.appendChild(bar);
 
           periodEl.textContent = periodLabel(habit.target.type);
