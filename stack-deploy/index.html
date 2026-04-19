@@ -1,0 +1,2687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Stack</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="habit-tracker-icon.svg" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Stack" />
+  <meta name="theme-color" content="#000000" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #000000;
+      --ink-dim: #888888;
+      --ink-faint: #e5e5e5;
+      --paper: #ffffff;
+      --rule: #e0e0e0;
+      --cell: 26px;
+      --gap: 6px;
+      --unit: 8px;
+    }
+
+    :root[data-theme="dark"] {
+      --ink: #ffffff;
+      --ink-dim: #888888;
+      --ink-faint: #2a2a2a;
+      --paper: #000000;
+      --rule: #2a2a2a;
+    }
+
+    :root { --accent: var(--ink); }
+    :root[data-accent="ferrari"]   { --accent: #ff2800; }
+    :root[data-accent="nike"]      { --accent: #fa5400; }
+    :root[data-accent="snapchat"]  { --accent: #fffc00; }
+    :root[data-accent="whatsapp"]  { --accent: #25d366; }
+    :root[data-accent="starbucks"] { --accent: #006241; }
+    :root[data-accent="coinbase"]  { --accent: #0052ff; }
+    :root[data-accent="purple"]    { --accent: #6a0dad; }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      background: var(--paper);
+      color: var(--ink);
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      font-feature-settings: "ss01", "cv11", "tnum";
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 420px;
+      padding: calc(var(--unit) * 6) calc(var(--unit) * 3) calc(80px + env(safe-area-inset-bottom, 0));
+    }
+
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* ---------- Top bar ---------- */
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: calc(var(--unit) * 2);
+      padding-bottom: calc(var(--unit) * 2);
+      margin-bottom: calc(var(--unit) * 4);
+      border-bottom: 1px solid var(--rule);
+      min-height: 24px;
+      position: sticky;
+      top: 0;
+      background: var(--paper);
+      z-index: 10;
+    }
+
+    .topbar-left, .topbar-right { display: flex; align-items: center; min-width: 32px; }
+    .topbar-right { justify-content: flex-end; }
+
+    .topbar-title {
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+    }
+
+    .icon-btn {
+      background: transparent;
+      border: none;
+      padding: 6px;
+      margin: -6px;
+      cursor: pointer;
+      color: var(--ink);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .icon-btn:active { opacity: 0.6; }
+
+    .icon-back {
+      width: 10px;
+      height: 10px;
+      border-left: 1.5px solid currentColor;
+      border-bottom: 1.5px solid currentColor;
+      transform: rotate(45deg);
+      margin-right: 2px;
+    }
+
+    /* ---------- Habits (home) ---------- */
+
+    .habits { display: flex; flex-direction: column; padding-top: calc(var(--unit) * 2); }
+
+    .habit {
+      padding: calc(var(--unit) * 3) 0;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .habit:last-child { border-bottom: none; }
+
+    .habit-name {
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      margin-bottom: calc(var(--unit) * 1.5);
+      color: var(--ink);
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .cell-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .cell {
+      width: var(--cell);
+      height: var(--cell);
+      cursor: pointer;
+      transition: background-color 120ms ease, transform 80ms ease, filter 180ms ease;
+      padding: 0;
+      border: none;
+      background: var(--ink-faint);
+      position: relative;
+    }
+
+    .cell:active { transform: scale(0.94); }
+    .cell.filled { background: var(--accent); }
+
+    /* Subtle brightening when all 10 visible days are complete */
+    .habit.full-streak .cell.filled {
+      filter: brightness(1.1) saturate(1.05);
+    }
+
+    .cell-label {
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      color: var(--ink-dim);
+      line-height: 1;
+      text-align: center;
+    }
+
+    .cell-stack.is-today .cell-label {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    /* ---------- Lists (menu, settings, management) ---------- */
+
+    .list {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .list-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: calc(var(--unit) * 2.5) 0;
+      border-bottom: 1px solid var(--rule);
+      cursor: pointer;
+      background: transparent;
+      border-left: none;
+      border-right: none;
+      border-top: none;
+      width: 100%;
+      font-family: inherit;
+      text-align: left;
+      color: var(--ink);
+      -webkit-text-fill-color: var(--ink);
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    .list-item:first-child { border-top: 1px solid var(--rule); }
+
+    .list-item .list-item-label {
+      color: var(--ink);
+      -webkit-text-fill-color: var(--ink);
+    }
+
+    .list-item-label {
+      font-size: 16px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+    }
+
+    .list-item-meta {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+
+    .list-item-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .chev {
+      width: 7px;
+      height: 7px;
+      border-right: 1.5px solid var(--ink-dim);
+      border-bottom: 1.5px solid var(--ink-dim);
+      transform: rotate(-45deg);
+    }
+
+    /* ---------- Habit manage row ---------- */
+
+    .manage-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: calc(var(--unit) * 2) 0;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .manage-row:first-child { border-top: 1px solid var(--rule); }
+
+    .manage-row-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      background: none;
+      border: none;
+      padding: 0;
+      font-family: inherit;
+      text-align: left;
+      cursor: pointer;
+      color: var(--ink);
+      -webkit-text-fill-color: var(--ink);
+    }
+
+    .manage-row-name {
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+    }
+
+    .manage-row-target {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+
+    .manage-row-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    .arrow-btn {
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      background: transparent;
+      border: 1px solid var(--rule);
+      color: var(--ink-dim);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+    }
+
+    .arrow-btn:hover { color: var(--ink); border-color: var(--ink-dim); }
+    .arrow-btn:disabled { opacity: 0.3; cursor: default; }
+
+    /* ---------- Form ---------- */
+
+    .field { margin-bottom: calc(var(--unit) * 3); }
+
+    .field-label {
+      display: block;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      margin-bottom: calc(var(--unit) * 1);
+    }
+
+    .field-input {
+      width: 100%;
+      padding: calc(var(--unit) * 1.5) 0;
+      border: none;
+      border-bottom: 1px solid var(--ink);
+      background: transparent;
+      color: var(--ink);
+      font-family: inherit;
+      font-size: 17px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+    }
+
+    .field-input:focus { outline: none; }
+
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: calc(var(--unit) * 2) 0;
+      border-top: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .toggle-row-label {
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 22px;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: var(--ink-faint);
+      transition: 120ms ease;
+    }
+    .slider::before {
+      position: absolute;
+      content: '';
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      top: 3px;
+      background: var(--paper);
+      border: 1px solid var(--ink-dim);
+      transition: 120ms ease;
+    }
+    input:checked + .slider { background: var(--ink); }
+    input:checked + .slider::before { transform: translateX(18px); }
+
+    .target-controls {
+      padding: calc(var(--unit) * 2) 0;
+      display: none;
+      flex-direction: column;
+      gap: calc(var(--unit) * 2);
+    }
+
+    .target-controls.active { display: flex; }
+
+    .seg {
+      display: flex;
+      border: 1px solid var(--rule);
+    }
+
+    .seg button {
+      flex: 1;
+      background: transparent;
+      border: none;
+      border-right: 1px solid var(--rule);
+      padding: 10px 6px;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      cursor: pointer;
+    }
+
+    .seg button:last-child { border-right: none; }
+    .seg button.active { background: var(--ink); color: var(--paper); }
+
+    .count-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .count-row .field-input {
+      font-size: 28px;
+      font-weight: 500;
+      padding: 4px 0;
+      width: auto;
+      min-width: 80px;
+      max-width: 120px;
+    }
+
+    .count-hint {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 14px 0;
+      background: var(--ink);
+      color: var(--paper);
+      border: none;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      cursor: pointer;
+      margin-top: calc(var(--unit) * 3);
+    }
+
+    .btn-primary:active { opacity: 0.8; }
+
+    .btn-danger {
+      width: 100%;
+      padding: 14px 0;
+      background: transparent;
+      color: var(--ink-dim);
+      border: 1px solid var(--rule);
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      cursor: pointer;
+      margin-top: calc(var(--unit) * 1.5);
+    }
+
+    .btn-danger:hover { color: var(--ink); border-color: var(--ink-dim); }
+
+    .add-btn {
+      width: 100%;
+      padding: calc(var(--unit) * 2.5) 0;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--rule);
+      color: var(--ink);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+
+    .placeholder {
+      padding: calc(var(--unit) * 8) 0;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+
+    /* ---------- Export ---------- */
+
+    .export-body {
+      padding-top: calc(var(--unit) * 2);
+    }
+
+    .export-desc {
+      font-size: 14px;
+      color: var(--ink);
+      line-height: 1.5;
+      margin-bottom: calc(var(--unit) * 4);
+    }
+
+    .export-meta {
+      display: flex;
+      flex-direction: column;
+      border-top: 1px solid var(--rule);
+      margin-bottom: calc(var(--unit) * 4);
+    }
+
+    .export-meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: calc(var(--unit) * 2) 0;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .export-meta dt {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+
+    .export-meta dd {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ---------- History list + Detail ---------- */
+
+    .hx-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: calc(var(--unit) * 3);
+      padding: calc(var(--unit) * 3) 0;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .hx-stat-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      margin-bottom: calc(var(--unit) * 1);
+    }
+
+    .hx-stat-value {
+      font-size: 36px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .hx-stat-unit {
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--ink-dim);
+      margin-left: 4px;
+    }
+
+    .hx-rates {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: calc(var(--unit) * 2);
+      padding: calc(var(--unit) * 3) 0;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .hx-rate-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      margin-bottom: calc(var(--unit) * 1);
+    }
+
+    .hx-rate-value {
+      font-size: 22px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .hx-rate-pct {
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--ink-dim);
+      margin-left: 2px;
+    }
+
+    .hx-heatmap {
+      padding: calc(var(--unit) * 3) 0;
+    }
+
+    .hx-year-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: calc(var(--unit) * 3);
+    }
+
+    .hx-year-label {
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: 0;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .hx-year-btn {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      background: transparent;
+      border: 1px solid var(--rule);
+      color: var(--ink);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    .hx-year-btn:disabled { opacity: 0.3; cursor: default; }
+
+    .hx-empty-note {
+      padding: calc(var(--unit) * 4) 0;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+
+    /* GitHub-style weekly heatmap */
+    .hx-weekly {
+      margin-top: calc(var(--unit) * 2);
+    }
+
+    .hx-weekly-months {
+      display: grid;
+      gap: 1px;
+      margin-bottom: calc(var(--unit) * 1);
+    }
+
+    .hx-weekly-months span {
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      white-space: nowrap;
+    }
+
+    .hx-weekly-grid {
+      display: grid;
+      grid-auto-flow: column;
+      grid-template-rows: repeat(7, 1fr);
+      gap: 1px;
+    }
+
+    .hx-weekly-grid .hx-day {
+      aspect-ratio: 1;
+    }
+
+    .hx-month {
+      margin-bottom: calc(var(--unit) * 4);
+    }
+
+    .hx-month:last-child {
+      margin-bottom: 0;
+    }
+
+    .hx-month-name {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      margin-bottom: calc(var(--unit) * 1.5);
+    }
+
+    .hx-dow-row {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+
+    .hx-dow {
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      color: var(--ink-dim);
+      text-align: center;
+    }
+
+    .hx-month-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+
+    .hx-day {
+      aspect-ratio: 1;
+      background: var(--ink-faint);
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      transition: background-color 120ms ease, transform 80ms ease;
+    }
+
+    .hx-day.filled { background: var(--accent); }
+    .hx-day.empty-slot { background: transparent; cursor: default; }
+    .hx-day:active:not(.empty-slot) { transform: scale(0.94); }
+    .hx-day.disabled { opacity: 0.2; cursor: default; }
+    .hx-day.is-today { outline: 1px solid var(--ink); outline-offset: 1px; }
+
+    /* ---------- Scoreboard ---------- */
+
+    .sb-header {
+      padding: calc(var(--unit) * 2) 0 calc(var(--unit) * 4);
+      border-bottom: 1px solid var(--rule);
+      margin-bottom: calc(var(--unit) * 2);
+    }
+
+    .sb-year {
+      font-size: 44px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .sb-day {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      margin-top: calc(var(--unit) * 1);
+    }
+
+    .sb-cards {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sb-card {
+      padding: calc(var(--unit) * 3) 0;
+    }
+
+    .sb-card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: calc(var(--unit) * 1.5);
+    }
+
+    .sb-card-name {
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+    }
+
+    .sb-card-count {
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      line-height: 1;
+      color: var(--ink-dim);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .sb-card-count.hit,
+    .sb-card-count.exceeded {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .sb-card-total {
+      font-weight: 400;
+      color: var(--ink-dim);
+    }
+
+    .sb-card-bonus {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    .sb-card-bar {
+      height: 2px;
+      background: var(--ink-faint);
+      margin-bottom: calc(var(--unit) * 1.5);
+      position: relative;
+    }
+
+    .sb-card-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      transition: width 300ms ease;
+    }
+
+    .sb-card-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sb-card-period {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+
+    .sb-card-aside {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+
+    .sb-card-aside.strong {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: calc(var(--unit) * 10) calc(var(--unit) * 3);
+      min-height: 50vh;
+      gap: calc(var(--unit) * 3);
+    }
+
+    .empty-message {
+      font-size: 11px;
+      color: var(--ink-dim);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+
+    .btn-empty {
+      padding: 14px 28px;
+      background: transparent;
+      border: 1px solid var(--ink);
+      color: var(--ink);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      cursor: pointer;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .btn-empty:active { opacity: 0.7; }
+
+    .section-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      margin-top: calc(var(--unit) * 4);
+      margin-bottom: calc(var(--unit) * 1.5);
+    }
+    .section-label:first-child { margin-top: 0; }
+
+    .swatch {
+      width: 14px;
+      height: 14px;
+      display: inline-block;
+      border: 1px solid var(--rule);
+    }
+
+    /* ---------- Tab bar ---------- */
+
+    .tabbar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--paper);
+      border-top: 1px solid var(--rule);
+      z-index: 20;
+      padding-bottom: env(safe-area-inset-bottom, 0);
+      display: flex;
+      justify-content: center;
+    }
+
+    .tabbar-inner {
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 16px 0;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      color: var(--ink-dim);
+      font-family: inherit;
+      -webkit-appearance: none;
+      appearance: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .tab.active { color: var(--ink); }
+
+    .tab-label { display: none; }
+
+    .tab-icon {
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .tab-icon svg {
+      width: 22px;
+      height: 22px;
+      color: currentColor;
+    }
+
+    .tab-label {
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    /* ---------- Modal ---------- */
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 24px;
+    }
+
+    :root[data-theme="dark"] .modal-backdrop {
+      background: rgba(0, 0, 0, 0.7);
+    }
+
+    .modal-backdrop.active { display: flex; }
+
+    .modal {
+      background: var(--paper);
+      color: var(--ink);
+      max-width: 320px;
+      width: 100%;
+      padding: calc(var(--unit) * 4);
+      border: 1px solid var(--rule);
+    }
+
+    .modal-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink);
+      margin-bottom: calc(var(--unit) * 2);
+    }
+
+    .modal-body {
+      font-size: 14px;
+      color: var(--ink);
+      line-height: 1.5;
+      margin-bottom: calc(var(--unit) * 3);
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: calc(var(--unit) * 1.5);
+    }
+
+    .btn-modal {
+      flex: 1;
+      padding: 12px 0;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      cursor: pointer;
+      border: 1px solid var(--ink);
+      background: transparent;
+      color: var(--ink);
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    .btn-modal-primary {
+      background: var(--ink);
+      color: var(--paper);
+      -webkit-text-fill-color: var(--paper);
+    }
+
+    .btn-modal:active { opacity: 0.8; }
+
+    @media (max-width: 380px) {
+      :root {
+        --cell: 24px;
+        --gap: 5px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+
+    <!-- HOME (no topbar) -->
+    <div class="screen active" id="screen-home">
+      <section class="habits" id="habits"></section>
+    </div>
+
+    <!-- SCOREBOARD -->
+    <div class="screen" id="screen-scoreboard">
+      <div class="topbar">
+        <div class="topbar-left"></div>
+        <span class="topbar-title">Scoreboard</span>
+        <div class="topbar-right"></div>
+      </div>
+      <div class="sb-header">
+        <div class="sb-year" id="sb-year"></div>
+        <div class="sb-day" id="sb-day"></div>
+      </div>
+      <div class="sb-cards" id="sb-cards"></div>
+    </div>
+
+    <!-- HISTORY (list of habits) -->
+    <div class="screen" id="screen-history">
+      <div class="topbar">
+        <div class="topbar-left"></div>
+        <span class="topbar-title">History</span>
+        <div class="topbar-right"></div>
+      </div>
+      <div class="list" id="history-list"></div>
+    </div>
+
+    <!-- HISTORY DETAIL (per habit) -->
+    <div class="screen" id="screen-detail">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="icon-btn" data-nav="history" aria-label="Back">
+            <span class="icon-back"></span>
+          </button>
+        </div>
+        <span class="topbar-title" id="detail-title">Habit</span>
+        <div class="topbar-right"></div>
+      </div>
+      <div class="hx-stats">
+        <div>
+          <div class="hx-stat-label">Current streak</div>
+          <div class="hx-stat-value"><span id="detail-current-streak">0</span><span class="hx-stat-unit" id="detail-current-streak-unit">days</span></div>
+        </div>
+        <div>
+          <div class="hx-stat-label">Longest</div>
+          <div class="hx-stat-value"><span id="detail-longest-streak">0</span><span class="hx-stat-unit" id="detail-longest-streak-unit">days</span></div>
+        </div>
+      </div>
+      <div class="hx-rates">
+        <div>
+          <div class="hx-rate-label">30 days</div>
+          <div class="hx-rate-value"><span id="detail-rate-30">0</span><span class="hx-rate-pct">%</span></div>
+        </div>
+        <div>
+          <div class="hx-rate-label">90 days</div>
+          <div class="hx-rate-value"><span id="detail-rate-90">0</span><span class="hx-rate-pct">%</span></div>
+        </div>
+        <div>
+          <div class="hx-rate-label">365 days</div>
+          <div class="hx-rate-value"><span id="detail-rate-365">0</span><span class="hx-rate-pct">%</span></div>
+        </div>
+      </div>
+      <div class="hx-heatmap" id="detail-heatmap"></div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="screen" id="screen-settings">
+      <div class="topbar">
+        <div class="topbar-left"></div>
+        <span class="topbar-title">Settings</span>
+        <div class="topbar-right"></div>
+      </div>
+      <div class="list">
+        <button class="list-item" data-nav="habits">
+          <span class="list-item-label">Habits</span>
+          <div class="list-item-right"><span class="chev"></span></div>
+        </button>
+        <button class="list-item" data-nav="export">
+          <span class="list-item-label">Data</span>
+          <div class="list-item-right"><span class="chev"></span></div>
+        </button>
+        <button class="list-item" data-nav="appearance">
+          <span class="list-item-label">Appearance</span>
+          <div class="list-item-right">
+            <span class="list-item-meta" id="menu-appearance-meta">Light</span>
+            <span class="chev"></span>
+          </div>
+        </button>
+      </div>
+    </div>
+
+    <!-- HABITS (manage) -->
+    <div class="screen" id="screen-habits">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="icon-btn" data-nav="settings" aria-label="Back">
+            <span class="icon-back"></span>
+          </button>
+        </div>
+        <span class="topbar-title">Habits</span>
+        <div class="topbar-right"></div>
+      </div>
+      <div id="habits-manage"></div>
+      <button class="add-btn" id="add-habit-btn">+ Add habit</button>
+    </div>
+
+    <!-- HABIT EDIT -->
+    <div class="screen" id="screen-edit">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="icon-btn" data-nav="habits" aria-label="Back">
+            <span class="icon-back"></span>
+          </button>
+        </div>
+        <span class="topbar-title" id="edit-title">Add habit</span>
+        <div class="topbar-right"></div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="edit-name">Name</label>
+        <input class="field-input" id="edit-name" type="text" placeholder="e.g. Read" />
+      </div>
+
+      <div class="toggle-row">
+        <span class="toggle-row-label">Set a target</span>
+        <label class="switch">
+          <input type="checkbox" id="edit-target-on" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="target-controls" id="target-controls">
+        <div class="field">
+          <label class="field-label">Period</label>
+          <div class="seg" id="edit-target-type">
+            <button data-value="week" class="active">Per week</button>
+            <button data-value="month">Per month</button>
+            <button data-value="year">Per year</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Count</label>
+          <div class="count-row">
+            <input class="field-input" id="edit-target-count" type="number" min="1" step="1" value="5" />
+            <span class="count-hint" id="count-hint">times per week</span>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="edit-save">Save</button>
+      <button class="btn-danger" id="edit-delete" style="display:none;">Delete habit</button>
+    </div>
+
+    <!-- DATA (export + import) -->
+    <div class="screen" id="screen-export">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="icon-btn" data-nav="settings" aria-label="Back">
+            <span class="icon-back"></span>
+          </button>
+        </div>
+        <span class="topbar-title">Data</span>
+        <div class="topbar-right"></div>
+      </div>
+      <div class="export-body">
+        <div class="section-label" style="margin-top: 0;">Export</div>
+        <p class="export-desc">
+          Download a CSV with all your marks. One row per habit per day, from January 1 of the current year through today. Deleted habits are included.
+        </p>
+        <dl class="export-meta">
+          <div class="export-meta-row">
+            <dt>Habits</dt>
+            <dd id="export-habits-count">0</dd>
+          </div>
+          <div class="export-meta-row">
+            <dt>Rows</dt>
+            <dd id="export-rows-count">0</dd>
+          </div>
+        </dl>
+        <button class="btn-primary" id="export-download">Download CSV</button>
+
+        <div class="section-label">Import</div>
+        <p class="export-desc">
+          Restore from a Stack CSV file. This replaces all current habits and marks. Use for switching phones, browsers, or recovering from a backup.
+        </p>
+        <input type="file" id="import-file" accept=".csv,text/csv" style="display:none;" />
+        <button class="btn-modal" id="import-btn" style="width: 100%; padding: 14px 0; margin-top: 0;">Import CSV</button>
+      </div>
+    </div>
+
+    <!-- APPEARANCE -->
+    <div class="screen" id="screen-appearance">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="icon-btn" data-nav="settings" aria-label="Back">
+            <span class="icon-back"></span>
+          </button>
+        </div>
+        <span class="topbar-title">Appearance</span>
+        <div class="topbar-right"></div>
+      </div>
+
+      <div class="section-label">Theme</div>
+      <div class="list">
+        <button class="list-item theme-option" data-theme="light">
+          <span class="list-item-label">Light</span>
+          <div class="list-item-right">
+            <span class="list-item-meta theme-check" data-for="light" style="display:none;">Current</span>
+          </div>
+        </button>
+        <button class="list-item theme-option" data-theme="dark">
+          <span class="list-item-label">Dark</span>
+          <div class="list-item-right">
+            <span class="list-item-meta theme-check" data-for="dark" style="display:none;">Current</span>
+          </div>
+        </button>
+      </div>
+
+      <div class="section-label">Accent</div>
+      <div class="list">
+        <button class="list-item accent-option" data-accent="mono">
+          <span class="list-item-label">Monochrome</span>
+          <div class="list-item-right">
+            <span class="list-item-meta accent-check" data-for="mono" style="display:none;">Current</span>
+            <span class="swatch" style="background: var(--ink);"></span>
+          </div>
+        </button>
+        <button class="list-item accent-option" data-accent="ferrari">
+          <span class="list-item-label">Rosso Corsa</span>
+          <div class="list-item-right">
+            <span class="list-item-meta accent-check" data-for="ferrari" style="display:none;">Current</span>
+            <span class="swatch" style="background: #ff2800;"></span>
+          </div>
+        </button>
+        <button class="list-item accent-option" data-accent="nike">
+          <span class="list-item-label">Victory</span>
+          <div class="list-item-right">
+            <span class="list-item-meta accent-check" data-for="nike" style="display:none;">Current</span>
+            <span class="swatch" style="background: #fa5400;"></span>
+          </div>
+        </button>
+        <button class="list-item accent-option" data-accent="snapchat">
+          <span class="list-item-label">Snap</span>
+          <div class="list-item-right">
+            <span class="list-item-meta accent-check" data-for="snapchat" style="display:none;">Current</span>
+            <span class="swatch" style="background: #fffc00;"></span>
+          </div>
+        </button>
+        <button class="list-item accent-option" data-accent="whatsapp">
+          <span class="list-item-label">Speed</span>
+          <div class="list-item-right">
+            <span class="list-item-meta accent-check" data-for="whatsapp" style="display:none;">Current</span>
+            <span class="swatch" style="background: #25d366;"></span>
+          </div>
+        </button>
+        <button class="list-item accent-option" data-accent="starbucks">
+          <span class="list-item-label">Growth</span>
+          <div class="list-item-right">
+            <span class="list-item-meta accent-check" data-for="starbucks" style="display:none;">Current</span>
+            <span class="swatch" style="background: #006241;"></span>
+          </div>
+        </button>
+        <button class="list-item accent-option" data-accent="coinbase">
+          <span class="list-item-label">Next</span>
+          <div class="list-item-right">
+            <span class="list-item-meta accent-check" data-for="coinbase" style="display:none;">Current</span>
+            <span class="swatch" style="background: #0052ff;"></span>
+          </div>
+        </button>
+        <button class="list-item accent-option" data-accent="purple">
+          <span class="list-item-label">Royal</span>
+          <div class="list-item-right">
+            <span class="list-item-meta accent-check" data-for="purple" style="display:none;">Current</span>
+            <span class="swatch" style="background: #6a0dad;"></span>
+          </div>
+        </button>
+      </div>
+
+      <div class="section-label">History Heatmap</div>
+      <div class="list">
+        <button class="list-item heatmap-option" data-heatmap="months">
+          <span class="list-item-label">Months</span>
+          <div class="list-item-right">
+            <span class="list-item-meta heatmap-check" data-for="months" style="display:none;">Current</span>
+          </div>
+        </button>
+        <button class="list-item heatmap-option" data-heatmap="weeks">
+          <span class="list-item-label">Weeks</span>
+          <div class="list-item-right">
+            <span class="list-item-meta heatmap-check" data-for="weeks" style="display:none;">Current</span>
+          </div>
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Confirm modal -->
+  <div class="modal-backdrop" id="modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h2 class="modal-title" id="modal-title">Confirm</h2>
+      <p class="modal-body" id="modal-body"></p>
+      <div class="modal-actions">
+        <button class="btn-modal" id="modal-cancel">Cancel</button>
+        <button class="btn-modal btn-modal-primary" id="modal-ok">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab bar -->
+  <nav class="tabbar">
+    <div class="tabbar-inner">
+      <button class="tab" data-tab="home" aria-label="Home">
+        <span class="tab-icon">
+          <svg viewBox="0 0 22 22" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+            <rect x="3" y="3" width="16" height="16"/>
+          </svg>
+        </span>
+        <span class="tab-label">Home</span>
+      </button>
+      <button class="tab" data-tab="scoreboard" aria-label="Scoreboard">
+        <span class="tab-icon">
+          <svg viewBox="0 0 22 22" width="22" height="22">
+            <rect x="3" y="3" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="3" y="11" width="16" height="8" fill="currentColor"/>
+          </svg>
+        </span>
+        <span class="tab-label">Scoreboard</span>
+      </button>
+      <button class="tab" data-tab="history" aria-label="History">
+        <span class="tab-icon">
+          <svg viewBox="0 0 22 22" width="22" height="22" fill="currentColor">
+            <rect x="3" y="3" width="4" height="4"/>
+            <rect x="9" y="3" width="4" height="4"/>
+            <rect x="15" y="3" width="4" height="4"/>
+            <rect x="3" y="9" width="4" height="4"/>
+            <rect x="9" y="9" width="4" height="4"/>
+            <rect x="15" y="9" width="4" height="4"/>
+            <rect x="3" y="15" width="4" height="4"/>
+            <rect x="9" y="15" width="4" height="4"/>
+            <rect x="15" y="15" width="4" height="4"/>
+          </svg>
+        </span>
+        <span class="tab-label">History</span>
+      </button>
+      <button class="tab" data-tab="settings" aria-label="Settings">
+        <span class="tab-icon">
+          <svg viewBox="0 0 22 22" width="22" height="22">
+            <rect x="3" y="3" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="9" y="9" width="4" height="4" fill="currentColor"/>
+          </svg>
+        </span>
+        <span class="tab-label">Settings</span>
+      </button>
+    </div>
+  </nav>
+
+  <script>
+    // Declared early so init-time function calls don't trip TDZ errors.
+    let currentScreen = 'home';
+    let detailId = null;
+    let detailYear = null;
+    let editingId = null;
+    let editOrigin = 'habits';
+
+    // ---------- Theme + Accent + Heatmap style ----------
+    const THEME_KEY = 'habit-tracker-theme';
+    const ACCENT_KEY = 'habit-tracker-accent';
+    const HEATMAP_KEY = 'habit-tracker-heatmap';
+    const VALID_ACCENTS = ['mono', 'ferrari', 'nike', 'snapchat', 'whatsapp', 'starbucks', 'coinbase', 'purple'];
+    const VALID_HEATMAPS = ['months', 'weeks'];
+
+
+
+    function loadTheme() { return localStorage.getItem(THEME_KEY) || 'light'; }
+    function loadAccent() {
+      const a = localStorage.getItem(ACCENT_KEY);
+      return VALID_ACCENTS.includes(a) ? a : 'mono';
+    }
+    function loadHeatmapStyle() {
+      const h = localStorage.getItem(HEATMAP_KEY);
+      return VALID_HEATMAPS.includes(h) ? h : 'months';
+    }
+    function applyHeatmapStyle(h) {
+      if (!VALID_HEATMAPS.includes(h)) h = 'months';
+      localStorage.setItem(HEATMAP_KEY, h);
+      document.querySelectorAll('.heatmap-check').forEach(el => {
+        el.style.display = el.dataset.for === h ? 'inline' : 'none';
+      });
+      if (currentScreen === 'detail' && detailId) {
+        renderHeatmap(detailId);
+      }
+    }
+
+    const ACCENT_NAMES = {
+      mono: 'Mono',
+      ferrari: 'Rosso Corsa',
+      nike: 'Victory',
+      snapchat: 'Snap',
+      whatsapp: 'Speed',
+      starbucks: 'Growth',
+      coinbase: 'Next',
+      purple: 'Royal'
+    };
+
+    function applyTheme(t) {
+      document.documentElement.setAttribute('data-theme', t);
+      localStorage.setItem(THEME_KEY, t);
+      document.querySelectorAll('.theme-check').forEach(el => {
+        el.style.display = el.dataset.for === t ? 'inline' : 'none';
+      });
+      updateAppearanceMeta();
+    }
+
+    function applyAccent(a) {
+      if (a === 'mono') {
+        document.documentElement.removeAttribute('data-accent');
+      } else {
+        document.documentElement.setAttribute('data-accent', a);
+      }
+      localStorage.setItem(ACCENT_KEY, a);
+      document.querySelectorAll('.accent-check').forEach(el => {
+        el.style.display = el.dataset.for === a ? 'inline' : 'none';
+      });
+      updateAppearanceMeta();
+    }
+
+    function updateAppearanceMeta() {
+      const meta = document.getElementById('menu-appearance-meta');
+      if (!meta) return;
+      const t = loadTheme();
+      const a = loadAccent();
+      const theme = t.charAt(0).toUpperCase() + t.slice(1);
+      const accent = ACCENT_NAMES[a] || a;
+      meta.textContent = `${theme} · ${accent}`;
+    }
+
+    applyTheme(loadTheme());
+    applyAccent(loadAccent());
+    applyHeatmapStyle(loadHeatmapStyle());
+
+    // ---------- State ----------
+    const STORAGE_KEY = 'habit-tracker-v4';
+
+    function makeId() {
+      return 'h' + Math.random().toString(36).slice(2, 9);
+    }
+
+    // No default habits. First-launch shows the empty state.
+    const seedHabits = [];
+    function seedMarks() { return {}; }
+
+    function load() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        try { return JSON.parse(raw); } catch (e) {}
+      }
+      const initial = { habits: seedHabits, marks: seedMarks() };
+      save(initial);
+      return initial;
+    }
+
+    function save(s) { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
+
+    let state = load();
+
+    // ---------- Date helpers ----------
+    function formatISO(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function getLastNDates(n) {
+      const out = [];
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      for (let i = n - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        out.push(formatISO(d));
+      }
+      return out;
+    }
+
+    function dayOfWeekLetter(iso) {
+      const d = new Date(iso + 'T00:00:00');
+      return ['S','M','T','W','T','F','S'][d.getDay()];
+    }
+
+    // Returns [startISO, endISO] inclusive for the current week (Sun-Sat), month, or year.
+    function rangeForPeriod(type) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (type === 'week') {
+        const start = new Date(today);
+        start.setDate(today.getDate() - today.getDay()); // back to Sunday
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        return [formatISO(start), formatISO(end)];
+      }
+      if (type === 'month') {
+        const start = new Date(today.getFullYear(), today.getMonth(), 1);
+        const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        return [formatISO(start), formatISO(end)];
+      }
+      // year
+      const start = new Date(today.getFullYear(), 0, 1);
+      const end = new Date(today.getFullYear(), 11, 31);
+      return [formatISO(start), formatISO(end)];
+    }
+
+    function countInRange(habitId, startIso, endIso) {
+      const marks = state.marks[habitId] || [];
+      return marks.filter(m => m >= startIso && m <= endIso).length;
+    }
+
+    function dayOfYear(d) {
+      const start = new Date(d.getFullYear(), 0, 1);
+      return Math.floor((d - start) / 86400000) + 1;
+    }
+
+    function periodLabel(type) {
+      if (type === 'week') return 'This week';
+      if (type === 'month') return 'This month';
+      return 'This year';
+    }
+
+    // ---------- Mark helpers ----------
+    function isMarked(hid, iso) {
+      return (state.marks[hid] || []).includes(iso);
+    }
+
+    function toggleMark(hid, iso) {
+      if (!state.marks[hid]) state.marks[hid] = [];
+      const i = state.marks[hid].indexOf(iso);
+      if (i >= 0) state.marks[hid].splice(i, 1);
+      else state.marks[hid].push(iso);
+      save(state);
+      renderHome();
+    }
+
+    // ---------- Habit helpers ----------
+    function sortedHabits() {
+      return [...state.habits]
+        .filter(h => !h.deletedAt)
+        .sort((a, b) => a.position - b.position);
+    }
+
+    function allHabitsIncludingDeleted() {
+      return [...state.habits].sort((a, b) => a.position - b.position);
+    }
+
+    function addHabit({ name, target }) {
+      const maxPos = state.habits.reduce((m, h) => Math.max(m, h.position), -1);
+      state.habits.push({
+        id: makeId(),
+        name,
+        position: maxPos + 1,
+        createdAt: new Date().toISOString(),
+        target
+      });
+      save(state);
+    }
+
+    function updateHabit(id, patch) {
+      const h = state.habits.find(h => h.id === id);
+      if (h) Object.assign(h, patch);
+      save(state);
+    }
+
+    function deleteHabit(id) {
+      const h = state.habits.find(h => h.id === id);
+      if (h) h.deletedAt = new Date().toISOString();
+      save(state);
+    }
+
+    function moveHabit(id, dir) {
+      const sorted = sortedHabits();
+      const idx = sorted.findIndex(h => h.id === id);
+      const swapIdx = idx + dir;
+      if (swapIdx < 0 || swapIdx >= sorted.length) return;
+      const a = sorted[idx], b = sorted[swapIdx];
+      const tmp = a.position;
+      a.position = b.position;
+      b.position = tmp;
+      save(state);
+    }
+
+    function targetLabel(t) {
+      if (!t) return '';
+      return `${t.count}/${t.type}`;
+    }
+
+    // ---------- Navigation ----------
+    // Maps a screen to the tab that should be highlighted.
+    // 'home' has no tab active.
+    const SCREEN_TO_TAB = {
+      home: 'home',
+      scoreboard: 'scoreboard',
+      history: 'history',
+      detail: 'history',
+      settings: 'settings',
+      habits: 'settings',
+      edit: 'settings',
+      appearance: 'settings',
+      export: 'settings'
+    };
+
+    function nav(screen) {
+      currentScreen = screen;
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById('screen-' + screen).classList.add('active');
+      window.scrollTo(0, 0);
+      updateActiveTab();
+      if (screen === 'home') renderHome();
+      if (screen === 'habits') renderHabitsManage();
+      if (screen === 'edit') renderEditForm();
+      if (screen === 'scoreboard') renderScoreboard();
+      if (screen === 'history') renderHistoryList();
+      if (screen === 'detail') renderDetail();
+      if (screen === 'export') renderExport();
+    }
+
+    function updateActiveTab() {
+      const tab = SCREEN_TO_TAB[currentScreen];
+      document.querySelectorAll('.tab').forEach(el => {
+        el.classList.toggle('active', el.dataset.tab === tab);
+      });
+    }
+
+    document.querySelectorAll('[data-nav]').forEach(el => {
+      el.addEventListener('click', () => nav(el.dataset.nav));
+    });
+
+    // Tab clicks: nav to that tab's root screen.
+    document.querySelectorAll('.tab').forEach(el => {
+      el.addEventListener('click', () => nav(el.dataset.tab));
+    });
+
+    document.querySelectorAll('.theme-option').forEach(el => {
+      el.addEventListener('click', () => applyTheme(el.dataset.theme));
+    });
+
+    document.querySelectorAll('.accent-option').forEach(el => {
+      el.addEventListener('click', () => applyAccent(el.dataset.accent));
+    });
+
+    document.querySelectorAll('.heatmap-option').forEach(el => {
+      el.addEventListener('click', () => applyHeatmapStyle(el.dataset.heatmap));
+    });
+
+    // ---------- Home render ----------
+    function renderHome() {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const last10 = getLastNDates(10);
+      const todayIso = formatISO(today);
+      const container = document.getElementById('habits');
+      container.innerHTML = '';
+
+      // Empty state: no habits yet
+      if (state.habits.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        const msg = document.createElement('p');
+        msg.className = 'empty-message';
+        msg.textContent = 'No habits yet';
+        const btn = document.createElement('button');
+        btn.className = 'btn-empty';
+        btn.textContent = '+ Add your first habit';
+        btn.addEventListener('click', () => openEdit(null, 'home'));
+        empty.appendChild(msg);
+        empty.appendChild(btn);
+        container.appendChild(empty);
+        return;
+      }
+
+      for (const habit of sortedHabits()) {
+        const habitEl = document.createElement('div');
+        const fullStreak = last10.every(iso => isMarked(habit.id, iso));
+        habitEl.className = 'habit' + (fullStreak ? ' full-streak' : '');
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'habit-name';
+        nameEl.textContent = habit.name;
+        habitEl.appendChild(nameEl);
+
+        const rowEl = document.createElement('div');
+        rowEl.className = 'row';
+
+        for (const iso of last10) {
+          const stack = document.createElement('div');
+          stack.className = 'cell-stack' + (iso === todayIso ? ' is-today' : '');
+
+          const btn = document.createElement('button');
+          btn.className = 'cell' + (isMarked(habit.id, iso) ? ' filled' : '');
+          btn.addEventListener('click', () => toggleMark(habit.id, iso));
+          stack.appendChild(btn);
+
+          const lbl = document.createElement('div');
+          lbl.className = 'cell-label';
+          lbl.textContent = dayOfWeekLetter(iso);
+          stack.appendChild(lbl);
+
+          rowEl.appendChild(stack);
+        }
+
+        habitEl.appendChild(rowEl);
+        container.appendChild(habitEl);
+      }
+    }
+
+    // ---------- Scoreboard render ----------
+    function renderScoreboard() {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const year = today.getFullYear();
+      document.getElementById('sb-year').textContent = year;
+      document.getElementById('sb-day').textContent = 'Day ' + dayOfYear(today);
+
+      const container = document.getElementById('sb-cards');
+      container.innerHTML = '';
+
+      const habits = sortedHabits();
+      if (habits.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'placeholder';
+        empty.textContent = 'No habits yet';
+        container.appendChild(empty);
+        return;
+      }
+
+      const [yearStart, yearEnd] = rangeForPeriod('year');
+
+      for (const habit of habits) {
+        const card = document.createElement('div');
+        card.className = 'sb-card';
+
+        const head = document.createElement('div');
+        head.className = 'sb-card-head';
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'sb-card-name';
+        nameEl.textContent = habit.name;
+        head.appendChild(nameEl);
+
+        const countEl = document.createElement('span');
+        countEl.className = 'sb-card-count';
+        head.appendChild(countEl);
+
+        card.appendChild(head);
+
+        // Build meta first, append later so we can insertBefore the bar if needed
+        const meta = document.createElement('div');
+        meta.className = 'sb-card-meta';
+
+        const periodEl = document.createElement('span');
+        periodEl.className = 'sb-card-period';
+        meta.appendChild(periodEl);
+
+        const asideEl = document.createElement('span');
+        asideEl.className = 'sb-card-aside';
+        meta.appendChild(asideEl);
+
+        if (habit.target) {
+          const [pStart, pEnd] = rangeForPeriod(habit.target.type);
+          const count = countInRange(habit.id, pStart, pEnd);
+          const target = habit.target.count;
+
+          let state = 'pending';
+          if (count > target) state = 'exceeded';
+          else if (count === target) state = 'hit';
+
+          countEl.classList.add(state);
+          countEl.innerHTML = `${count}<span class="sb-card-total">/${target}</span>`;
+
+          // Bar sits between head and meta
+          const bar = document.createElement('div');
+          bar.className = 'sb-card-bar';
+          const fill = document.createElement('div');
+          fill.className = 'sb-card-bar-fill';
+          const pct = Math.min(100, Math.round((count / target) * 100));
+          fill.style.width = pct + '%';
+          bar.appendChild(fill);
+          card.appendChild(bar);
+
+          periodEl.textContent = periodLabel(habit.target.type);
+
+          if (habit.target.type === 'year') {
+            if (state === 'exceeded') {
+              asideEl.classList.add('strong');
+              asideEl.textContent = 'Bonus';
+            } else if (state === 'hit') {
+              asideEl.classList.add('strong');
+              asideEl.textContent = 'Complete';
+            } else {
+              asideEl.textContent = '';
+            }
+          } else {
+            const ytd = countInRange(habit.id, yearStart, yearEnd);
+            if (state === 'exceeded') {
+              asideEl.classList.add('strong');
+              asideEl.textContent = 'Bonus';
+            } else if (state === 'hit') {
+              asideEl.classList.add('strong');
+              asideEl.textContent = 'Complete';
+            } else {
+              asideEl.textContent = `${ytd} ytd`;
+            }
+          }
+        } else {
+          const ytd = countInRange(habit.id, yearStart, yearEnd);
+          countEl.textContent = ytd;
+          periodEl.textContent = 'This year';
+          asideEl.textContent = 'No target';
+        }
+
+        card.appendChild(meta);
+        container.appendChild(card);
+      }
+    }
+
+    // ---------- Export ----------
+    function csvEscape(s) {
+      const str = String(s);
+      if (/[",\n\r]/.test(str)) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    }
+
+    function buildCSVRows() {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const year = today.getFullYear();
+      const yearStart = new Date(year, 0, 1);
+
+      const rows = [['date', 'habit_name', 'completed', 'target_type', 'target_count']];
+
+      for (const habit of allHabitsIncludingDeleted()) {
+        const startDate = new Date(yearStart);
+        const endDate = habit.deletedAt
+          ? new Date(habit.deletedAt)
+          : new Date(today);
+        endDate.setHours(0, 0, 0, 0);
+        const finalEnd = endDate > today ? new Date(today) : endDate;
+
+        const targetType = habit.target ? habit.target.type : '';
+        const targetCount = habit.target ? String(habit.target.count) : '';
+
+        let d = new Date(startDate);
+        while (d <= finalEnd) {
+          const iso = formatISO(d);
+          const completed = isMarked(habit.id, iso) ? 'true' : 'false';
+          rows.push([iso, habit.name, completed, targetType, targetCount]);
+          d.setDate(d.getDate() + 1);
+        }
+      }
+
+      return rows;
+    }
+
+    function buildCSVString() {
+      const rows = buildCSVRows();
+      return rows.map(r => r.map(csvEscape).join(',')).join('\n');
+    }
+
+    function downloadCSV() {
+      const csv = buildCSVString();
+      const today = new Date();
+      const stamp = formatISO(today);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `stack-${stamp}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function renderExport() {
+      const rows = buildCSVRows();
+      const habitsCount = allHabitsIncludingDeleted().length;
+      // rows[0] is the header
+      const dataRows = rows.length > 0 ? rows.length - 1 : 0;
+      document.getElementById('export-habits-count').textContent = habitsCount;
+      document.getElementById('export-rows-count').textContent = dataRows.toLocaleString();
+    }
+
+    document.getElementById('export-download').addEventListener('click', downloadCSV);
+
+    // ---------- CSV Import ----------
+    function parseCSVLine(line) {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') {
+          if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+          else { inQuotes = !inQuotes; }
+        } else if (c === ',' && !inQuotes) {
+          result.push(current);
+          current = '';
+        } else {
+          current += c;
+        }
+      }
+      result.push(current);
+      return result;
+    }
+
+    function importCSVText(text) {
+      const lines = text.replace(/\r\n/g, '\n').split('\n').filter(l => l.trim().length > 0);
+      if (lines.length < 1) throw new Error('The file is empty.');
+
+      const header = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
+      const dateIdx = header.indexOf('date');
+      const nameIdx = header.indexOf('habit_name');
+      const completedIdx = header.indexOf('completed');
+      const targetTypeIdx = header.indexOf('target_type');
+      const targetCountIdx = header.indexOf('target_count');
+
+      if (dateIdx < 0 || nameIdx < 0 || completedIdx < 0) {
+        throw new Error('Missing required columns. Expected date, habit_name, completed.');
+      }
+
+      // Group by habit name in insertion order
+      const byName = new Map();
+
+      for (let i = 1; i < lines.length; i++) {
+        const cells = parseCSVLine(lines[i]);
+        if (cells.length <= Math.max(dateIdx, nameIdx, completedIdx)) continue;
+        const date = cells[dateIdx].trim();
+        const name = cells[nameIdx].trim();
+        const completed = cells[completedIdx].trim().toLowerCase() === 'true';
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+        if (!name) continue;
+
+        if (!byName.has(name)) {
+          byName.set(name, {
+            marks: [],
+            firstDate: date,
+            lastDate: date,
+            target: null
+          });
+        }
+        const entry = byName.get(name);
+        if (date < entry.firstDate) entry.firstDate = date;
+        if (date > entry.lastDate) entry.lastDate = date;
+        if (completed) entry.marks.push(date);
+
+        // Optional target columns
+        if (targetTypeIdx >= 0 && targetCountIdx >= 0 && !entry.target) {
+          const t = (cells[targetTypeIdx] || '').trim();
+          const cRaw = (cells[targetCountIdx] || '').trim();
+          const c = parseInt(cRaw, 10);
+          if (['week','month','year'].includes(t) && Number.isFinite(c) && c > 0) {
+            entry.target = { type: t, count: c };
+          }
+        }
+      }
+
+      if (byName.size === 0) {
+        throw new Error('No valid rows found in the file.');
+      }
+
+      // Build new state
+      const newHabits = [];
+      const newMarks = {};
+      let pos = 0;
+      for (const [name, data] of byName) {
+        const id = makeId();
+        newHabits.push({
+          id,
+          name,
+          position: pos++,
+          createdAt: data.firstDate + 'T00:00:00.000Z',
+          target: data.target
+        });
+        newMarks[id] = data.marks;
+      }
+
+      state.habits = newHabits;
+      state.marks = newMarks;
+      save(state);
+    }
+
+    document.getElementById('import-btn').addEventListener('click', () => {
+      document.getElementById('import-file').click();
+    });
+
+    document.getElementById('import-file').addEventListener('change', async (e) => {
+      const input = e.target;
+      const file = input.files && input.files[0];
+      if (!file) return;
+
+      const ok = await showConfirm({
+        title: 'Import CSV',
+        body: 'This replaces all current habits and marks with the data from the file. Continue?',
+        okLabel: 'Import',
+        cancelLabel: 'Cancel'
+      });
+
+      if (!ok) {
+        input.value = '';
+        return;
+      }
+
+      try {
+        const text = await file.text();
+        importCSVText(text);
+        input.value = '';
+        nav('home');
+      } catch (err) {
+        input.value = '';
+        await showAlert({
+          title: 'Import failed',
+          body: err && err.message ? err.message : 'The file does not appear to be a valid Stack CSV.'
+        });
+      }
+    });
+
+    // ---------- History list render ----------
+    function renderHistoryList() {
+      const container = document.getElementById('history-list');
+      container.innerHTML = '';
+      const list = sortedHabits();
+
+      if (list.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'placeholder';
+        empty.textContent = 'No habits yet';
+        container.appendChild(empty);
+        return;
+      }
+
+      for (const habit of list) {
+        const btn = document.createElement('button');
+        btn.className = 'list-item';
+        btn.addEventListener('click', () => openDetail(habit.id));
+
+        const label = document.createElement('span');
+        label.className = 'list-item-label';
+        label.textContent = habit.name;
+        btn.appendChild(label);
+
+        const right = document.createElement('div');
+        right.className = 'list-item-right';
+        const chev = document.createElement('span');
+        chev.className = 'chev';
+        right.appendChild(chev);
+        btn.appendChild(right);
+
+        container.appendChild(btn);
+      }
+    }
+
+    // ---------- History detail render ----------
+    function openDetail(id) {
+      detailId = id;
+      detailYear = new Date().getFullYear();
+      nav('detail');
+    }
+
+    function computeCurrentStreak(habitId) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      let d = new Date(today);
+      let count = 0;
+      // If today not marked, start from yesterday
+      if (!isMarked(habitId, formatISO(today))) {
+        d.setDate(d.getDate() - 1);
+      }
+      while (isMarked(habitId, formatISO(d))) {
+        count++;
+        d.setDate(d.getDate() - 1);
+      }
+      return count;
+    }
+
+    function computeLongestStreak(habitId) {
+      const marks = (state.marks[habitId] || []).slice().sort();
+      if (marks.length === 0) return 0;
+      let longest = 1;
+      let current = 1;
+      for (let i = 1; i < marks.length; i++) {
+        const prev = new Date(marks[i - 1] + 'T00:00:00');
+        const cur = new Date(marks[i] + 'T00:00:00');
+        const diffDays = Math.round((cur - prev) / 86400000);
+        if (diffDays === 1) {
+          current++;
+          if (current > longest) longest = current;
+        } else {
+          current = 1;
+        }
+      }
+      return longest;
+    }
+
+    function computeRate(habitId, days) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const start = new Date(today);
+      start.setDate(today.getDate() - days + 1);
+      const startIso = formatISO(start);
+      const endIso = formatISO(today);
+      const hits = countInRange(habitId, startIso, endIso);
+      return Math.round((hits / days) * 100);
+    }
+
+    function renderDetail() {
+      if (!detailId) return;
+      const habit = state.habits.find(h => h.id === detailId);
+      if (!habit) { nav('history'); return; }
+
+      document.getElementById('detail-title').textContent = habit.name;
+
+      const currentStreak = computeCurrentStreak(habit.id);
+      const longestStreak = computeLongestStreak(habit.id);
+      document.getElementById('detail-current-streak').textContent = currentStreak;
+      document.getElementById('detail-longest-streak').textContent = longestStreak;
+      document.getElementById('detail-current-streak-unit').textContent = currentStreak === 1 ? 'day' : 'days';
+      document.getElementById('detail-longest-streak-unit').textContent = longestStreak === 1 ? 'day' : 'days';
+
+      document.getElementById('detail-rate-30').textContent = computeRate(habit.id, 30);
+      document.getElementById('detail-rate-90').textContent = computeRate(habit.id, 90);
+      document.getElementById('detail-rate-365').textContent = computeRate(habit.id, 365);
+
+      renderHeatmap(habit.id);
+    }
+
+    function earliestMarkYear(habitId) {
+      const marks = state.marks[habitId] || [];
+      if (marks.length === 0) return null;
+      return Number(marks.slice().sort()[0].slice(0, 4));
+    }
+
+    function renderHeatmap(habitId) {
+      if (loadHeatmapStyle() === 'weeks') {
+        return renderHeatmapWeekly(habitId);
+      }
+      return renderHeatmapMonthly(habitId);
+    }
+
+    function renderHeatmapMonthly(habitId) {
+      const container = document.getElementById('detail-heatmap');
+      container.innerHTML = '';
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const currentYear = today.getFullYear();
+      if (!detailYear) detailYear = currentYear;
+      const viewYear = detailYear;
+      const isCurrentYear = viewYear === currentYear;
+      const todayIso = formatISO(today);
+      const yearStartIso = `${viewYear}-01-01`;
+
+      // Year navigation bar
+      const nav = document.createElement('div');
+      nav.className = 'hx-year-nav';
+
+      const prev = document.createElement('button');
+      prev.className = 'hx-year-btn';
+      prev.textContent = '‹';
+      prev.setAttribute('aria-label', 'Previous year');
+      const earliest = earliestMarkYear(habitId);
+      const floor = earliest ? Math.min(earliest, currentYear - 1) : currentYear - 1;
+      prev.disabled = viewYear <= floor;
+      prev.addEventListener('click', () => {
+        detailYear = viewYear - 1;
+        renderHeatmap(habitId);
+      });
+
+      const label = document.createElement('span');
+      label.className = 'hx-year-label';
+      label.textContent = viewYear;
+
+      const next = document.createElement('button');
+      next.className = 'hx-year-btn';
+      next.textContent = '›';
+      next.setAttribute('aria-label', 'Next year');
+      next.disabled = viewYear >= currentYear;
+      next.addEventListener('click', () => {
+        detailYear = viewYear + 1;
+        renderHeatmap(habitId);
+      });
+
+      nav.appendChild(prev);
+      nav.appendChild(label);
+      nav.appendChild(next);
+      container.appendChild(nav);
+
+      // Show note if habit has no marks anywhere
+      const marksForHabit = state.marks[habitId] || [];
+      if (marksForHabit.length === 0 && isCurrentYear) {
+        const note = document.createElement('div');
+        note.className = 'hx-empty-note';
+        note.textContent = 'No marks yet · Tap any day';
+        container.appendChild(note);
+      }
+
+      // Render months. For current year: current month down to January.
+      // For past years: December down to January.
+      const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      const dowLabels = ['S','M','T','W','T','F','S'];
+      const startMonth = isCurrentYear ? today.getMonth() : 11;
+
+      for (let m = startMonth; m >= 0; m--) {
+        const monthEl = document.createElement('div');
+        monthEl.className = 'hx-month';
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'hx-month-name';
+        nameEl.textContent = monthNames[m];
+        monthEl.appendChild(nameEl);
+
+        // Day-of-week labels
+        const dowRow = document.createElement('div');
+        dowRow.className = 'hx-dow-row';
+        for (const d of dowLabels) {
+          const l = document.createElement('div');
+          l.className = 'hx-dow';
+          l.textContent = d;
+          dowRow.appendChild(l);
+        }
+        monthEl.appendChild(dowRow);
+
+        // Month grid
+        const grid = document.createElement('div');
+        grid.className = 'hx-month-grid';
+
+        const firstOfMonth = new Date(viewYear, m, 1);
+        const daysInMonth = new Date(viewYear, m + 1, 0).getDate();
+        const firstDow = firstOfMonth.getDay(); // 0 = Sunday
+
+        // Empty slots before day 1
+        for (let i = 0; i < firstDow; i++) {
+          const empty = document.createElement('div');
+          empty.className = 'hx-day empty-slot';
+          grid.appendChild(empty);
+        }
+
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateObj = new Date(viewYear, m, d);
+          const iso = formatISO(dateObj);
+          const btn = document.createElement('button');
+          btn.className = 'hx-day';
+          const isFuture = iso > todayIso;
+          // Retroactive marking only allowed in current year
+          const tappable = !isFuture && isCurrentYear;
+          if (!tappable) {
+            btn.classList.add('disabled');
+            btn.disabled = true;
+          }
+          if (isMarked(habitId, iso)) {
+            btn.classList.add('filled');
+          }
+          if (iso === todayIso) {
+            btn.classList.add('is-today');
+          }
+          btn.setAttribute('aria-label', `${monthNames[m]} ${d}, ${viewYear}`);
+          if (tappable) {
+            btn.addEventListener('click', () => {
+              toggleMark(habitId, iso);
+              renderDetail();
+            });
+          }
+          grid.appendChild(btn);
+        }
+
+        monthEl.appendChild(grid);
+        container.appendChild(monthEl);
+      }
+    }
+
+    function renderHeatmapWeekly(habitId) {
+      const container = document.getElementById('detail-heatmap');
+      container.innerHTML = '';
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const currentYear = today.getFullYear();
+      if (!detailYear) detailYear = currentYear;
+      const viewYear = detailYear;
+      const isCurrentYear = viewYear === currentYear;
+      const todayIso = formatISO(today);
+
+      // Year navigation bar (shared pattern)
+      const nav = document.createElement('div');
+      nav.className = 'hx-year-nav';
+
+      const prev = document.createElement('button');
+      prev.className = 'hx-year-btn';
+      prev.textContent = '‹';
+      prev.setAttribute('aria-label', 'Previous year');
+      const earliest = earliestMarkYear(habitId);
+      const floor = earliest ? Math.min(earliest, currentYear - 1) : currentYear - 1;
+      prev.disabled = viewYear <= floor;
+      prev.addEventListener('click', () => {
+        detailYear = viewYear - 1;
+        renderHeatmap(habitId);
+      });
+
+      const label = document.createElement('span');
+      label.className = 'hx-year-label';
+      label.textContent = viewYear;
+
+      const next = document.createElement('button');
+      next.className = 'hx-year-btn';
+      next.textContent = '›';
+      next.setAttribute('aria-label', 'Next year');
+      next.disabled = viewYear >= currentYear;
+      next.addEventListener('click', () => {
+        detailYear = viewYear + 1;
+        renderHeatmap(habitId);
+      });
+
+      nav.appendChild(prev);
+      nav.appendChild(label);
+      nav.appendChild(next);
+      container.appendChild(nav);
+
+      const marksForHabit = state.marks[habitId] || [];
+      if (marksForHabit.length === 0 && isCurrentYear) {
+        const note = document.createElement('div');
+        note.className = 'hx-empty-note';
+        note.textContent = 'No marks yet · Tap any day';
+        container.appendChild(note);
+      }
+
+      // Find the Sunday on or before Jan 1
+      const yearStart = new Date(viewYear, 0, 1);
+      const startDate = new Date(yearStart);
+      startDate.setDate(startDate.getDate() - yearStart.getDay());
+
+      // Find the Saturday on or after Dec 31
+      const yearEnd = new Date(viewYear, 11, 31);
+      const endDate = new Date(yearEnd);
+      endDate.setDate(endDate.getDate() + (6 - yearEnd.getDay()));
+
+      const totalDays = Math.round((endDate - startDate) / 86400000) + 1;
+      const totalWeeks = totalDays / 7;
+
+      const weekly = document.createElement('div');
+      weekly.className = 'hx-weekly';
+
+      // Month labels
+      const monthsRow = document.createElement('div');
+      monthsRow.className = 'hx-weekly-months';
+      monthsRow.style.gridTemplateColumns = `repeat(${totalWeeks}, 1fr)`;
+      const monthAbbrevs = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      let lastMonth = -1;
+      let lastMonthStartWeek = 0;
+      for (let w = 0; w < totalWeeks; w++) {
+        const cellDate = new Date(startDate);
+        cellDate.setDate(startDate.getDate() + w * 7 + 3); // midweek
+        const cellMonth = cellDate.getMonth();
+        const cellYear = cellDate.getFullYear();
+        if (cellYear !== viewYear) continue;
+        if (cellMonth !== lastMonth) {
+          if (lastMonth >= 0) {
+            const span = document.createElement('span');
+            span.textContent = monthAbbrevs[lastMonth];
+            span.style.gridColumn = `${lastMonthStartWeek + 1} / ${w + 1}`;
+            monthsRow.appendChild(span);
+          }
+          lastMonth = cellMonth;
+          lastMonthStartWeek = w;
+        }
+      }
+      if (lastMonth >= 0) {
+        const span = document.createElement('span');
+        span.textContent = monthAbbrevs[lastMonth];
+        span.style.gridColumn = `${lastMonthStartWeek + 1} / ${totalWeeks + 1}`;
+        monthsRow.appendChild(span);
+      }
+      weekly.appendChild(monthsRow);
+
+      // Grid
+      const grid = document.createElement('div');
+      grid.className = 'hx-weekly-grid';
+      grid.style.gridTemplateColumns = `repeat(${totalWeeks}, 1fr)`;
+
+      for (let w = 0; w < totalWeeks; w++) {
+        for (let d = 0; d < 7; d++) {
+          const cellDate = new Date(startDate);
+          cellDate.setDate(startDate.getDate() + w * 7 + d);
+          const inYear = cellDate.getFullYear() === viewYear;
+
+          const btn = document.createElement('button');
+          btn.className = 'hx-day';
+
+          if (!inYear) {
+            btn.classList.add('empty-slot');
+            btn.disabled = true;
+          } else {
+            const iso = formatISO(cellDate);
+            const isFuture = iso > todayIso;
+            const tappable = !isFuture && isCurrentYear;
+            if (!tappable) {
+              btn.classList.add('disabled');
+              btn.disabled = true;
+            }
+            if (isMarked(habitId, iso)) {
+              btn.classList.add('filled');
+            }
+            if (iso === todayIso) {
+              btn.classList.add('is-today');
+            }
+            btn.setAttribute('aria-label', iso);
+            if (tappable) {
+              btn.addEventListener('click', () => {
+                toggleMark(habitId, iso);
+                renderDetail();
+              });
+            }
+          }
+          grid.appendChild(btn);
+        }
+      }
+
+      weekly.appendChild(grid);
+      container.appendChild(weekly);
+    }
+
+    // ---------- Habits manage render ----------
+    function renderHabitsManage() {
+      const container = document.getElementById('habits-manage');
+      container.innerHTML = '';
+      const list = sortedHabits();
+
+      list.forEach((habit, idx) => {
+        const row = document.createElement('div');
+        row.className = 'manage-row';
+
+        const main = document.createElement('button');
+        main.className = 'manage-row-main';
+        const name = document.createElement('span');
+        name.className = 'manage-row-name';
+        name.textContent = habit.name;
+        main.appendChild(name);
+        if (habit.target) {
+          const tgt = document.createElement('span');
+          tgt.className = 'manage-row-target';
+          tgt.textContent = targetLabel(habit.target);
+          main.appendChild(tgt);
+        }
+        main.addEventListener('click', () => openEdit(habit.id));
+
+        const actions = document.createElement('div');
+        actions.className = 'manage-row-actions';
+        const up = document.createElement('button');
+        up.className = 'arrow-btn';
+        up.innerHTML = '↑';
+        up.disabled = idx === 0;
+        up.addEventListener('click', () => { moveHabit(habit.id, -1); renderHabitsManage(); });
+        const dn = document.createElement('button');
+        dn.className = 'arrow-btn';
+        dn.innerHTML = '↓';
+        dn.disabled = idx === list.length - 1;
+        dn.addEventListener('click', () => { moveHabit(habit.id, 1); renderHabitsManage(); });
+        actions.appendChild(up);
+        actions.appendChild(dn);
+
+        row.appendChild(main);
+        row.appendChild(actions);
+        container.appendChild(row);
+      });
+    }
+
+    document.getElementById('add-habit-btn').addEventListener('click', () => openEdit(null));
+
+    // ---------- Edit form ----------
+    function openEdit(id, origin = 'habits') {
+      editingId = id;
+      editOrigin = origin;
+      nav('edit');
+    }
+
+    function renderEditForm() {
+      const isNew = !editingId;
+      document.getElementById('edit-title').textContent = isNew ? 'Add habit' : 'Edit habit';
+      document.getElementById('edit-delete').style.display = isNew ? 'none' : 'block';
+
+      const nameInput = document.getElementById('edit-name');
+      const targetOn = document.getElementById('edit-target-on');
+      const targetCount = document.getElementById('edit-target-count');
+      const targetControls = document.getElementById('target-controls');
+
+      if (isNew) {
+        nameInput.value = '';
+        targetOn.checked = false;
+        targetControls.classList.remove('active');
+        setTargetType('week');
+        targetCount.value = 5;
+      } else {
+        const h = state.habits.find(h => h.id === editingId);
+        nameInput.value = h.name;
+        if (h.target) {
+          targetOn.checked = true;
+          targetControls.classList.add('active');
+          setTargetType(h.target.type);
+          targetCount.value = h.target.count;
+        } else {
+          targetOn.checked = false;
+          targetControls.classList.remove('active');
+          setTargetType('week');
+          targetCount.value = 5;
+        }
+      }
+      updateCountHint();
+      setTimeout(() => nameInput.focus(), 50);
+    }
+
+    function setTargetType(type) {
+      document.querySelectorAll('#edit-target-type button').forEach(b => {
+        b.classList.toggle('active', b.dataset.value === type);
+      });
+      updateCountHint();
+    }
+
+    function currentTargetType() {
+      const btn = document.querySelector('#edit-target-type button.active');
+      return btn ? btn.dataset.value : 'week';
+    }
+
+    function updateCountHint() {
+      const t = currentTargetType();
+      document.getElementById('count-hint').textContent = 'times per ' + t;
+    }
+
+    document.querySelectorAll('#edit-target-type button').forEach(btn => {
+      btn.addEventListener('click', () => setTargetType(btn.dataset.value));
+    });
+
+    document.getElementById('edit-target-on').addEventListener('change', (e) => {
+      document.getElementById('target-controls').classList.toggle('active', e.target.checked);
+    });
+
+    document.getElementById('edit-save').addEventListener('click', () => {
+      const name = document.getElementById('edit-name').value.trim();
+      if (!name) return;
+      const targetOn = document.getElementById('edit-target-on').checked;
+      let target = null;
+      if (targetOn) {
+        const count = parseInt(document.getElementById('edit-target-count').value, 10);
+        if (!Number.isFinite(count) || count < 1) return;
+        target = { type: currentTargetType(), count };
+      }
+
+      if (editingId) {
+        updateHabit(editingId, { name, target });
+      } else {
+        addHabit({ name, target });
+      }
+      const returnTo = editOrigin === 'home' ? 'home' : 'habits';
+      editingId = null;
+      editOrigin = 'habits';
+      nav(returnTo);
+    });
+
+    // ---------- Confirm modal ----------
+    let modalResolve = null;
+
+    function showConfirm({ title = 'Confirm', body = '', okLabel = 'OK', cancelLabel = 'Cancel', okStyle = 'primary', alert = false } = {}) {
+      document.getElementById('modal-title').textContent = title;
+      document.getElementById('modal-body').textContent = body;
+      const ok = document.getElementById('modal-ok');
+      ok.textContent = okLabel;
+      ok.className = 'btn-modal' + (okStyle === 'primary' ? ' btn-modal-primary' : '');
+      const cancel = document.getElementById('modal-cancel');
+      cancel.textContent = cancelLabel;
+      cancel.style.display = alert ? 'none' : '';
+      document.getElementById('modal').classList.add('active');
+      return new Promise(res => { modalResolve = res; });
+    }
+
+    function showAlert({ title, body, okLabel = 'OK' }) {
+      return showConfirm({ title, body, okLabel, alert: true });
+    }
+
+    function closeModal(result) {
+      document.getElementById('modal').classList.remove('active');
+      if (modalResolve) {
+        modalResolve(result);
+        modalResolve = null;
+      }
+    }
+
+    document.getElementById('modal-cancel').addEventListener('click', () => closeModal(false));
+    document.getElementById('modal-ok').addEventListener('click', () => closeModal(true));
+    document.getElementById('modal').addEventListener('click', (e) => {
+      if (e.target.id === 'modal') closeModal(false);
+    });
+
+    document.getElementById('edit-delete').addEventListener('click', async () => {
+      if (!editingId) return;
+      const ok = await showConfirm({
+        title: 'Delete habit',
+        body: "The habit's marks stay in your CSV export.",
+        okLabel: 'Delete',
+        cancelLabel: 'Cancel'
+      });
+      if (!ok) return;
+      deleteHabit(editingId);
+      editingId = null;
+      nav('habits');
+    });
+
+    // Initial render
+    renderHome();
+    updateActiveTab();
+  </script>
+</body>
+</html>
